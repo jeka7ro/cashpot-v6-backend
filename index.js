@@ -25,6 +25,20 @@ mongoose.connect(config.MONGODB_URI, {
   console.error('MongoDB connection error:', err);
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Cashpot V6 Backend API is running!',
+    version: '1.0.0',
+    endpoints: [
+      'GET /api/health',
+      'GET /api/companies',
+      'GET /api/locations', 
+      'GET /api/providers'
+    ]
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
