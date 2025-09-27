@@ -8,6 +8,12 @@ const config = require('./config');
 const Company = require('./models/Company');
 const Location = require('./models/Location');
 const Provider = require('./models/Provider');
+const User = require('./models/User');
+const File = require('./models/File');
+
+// Middleware
+const { verifyToken, isAdmin, isManager, generateToken } = require('./middleware/auth');
+const upload = require('./config/multer');
 
 const app = express();
 
@@ -37,6 +43,98 @@ app.get('/', (req, res) => {
       'GET /api/providers'
     ]
   });
+});
+
+// Authentication API
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password, firstName, lastName } = req.body;
+    
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const user = new User({ username, email, password, firstName, lastName });
+    await user.save();
+    
+    const token = generateToken(user._id);
+    
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(401).json({ error: 'Account is not active' });
+    }
+
+    const token = generateToken(user._id);
+    
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/me', verifyToken, async (req, res) => {
+  res.json({
+    user: {
+      id: req.user._id,
+      username: req.user.username,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      role: req.user.role
+    }
+  });
+});
+
+// Users API
+app.get('/api/users', verifyToken, isManager, async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Health check endpoint
